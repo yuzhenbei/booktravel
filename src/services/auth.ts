@@ -40,5 +40,19 @@ export const authService = {
       .eq('id', userId)
       .single();
     return { data, error };
+  },
+
+  async resetPassword(email: string) {
+    const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: window.location.origin, // 用户点击链接后跳转回首页
+    });
+    return { data, error };
+  },
+
+  async updatePassword(password: string) {
+    const { data, error } = await supabase.auth.updateUser({
+      password: password
+    });
+    return { data, error };
   }
 };

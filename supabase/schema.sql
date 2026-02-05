@@ -343,4 +343,81 @@ begin
 end;
 $$ language plpgsql security definer;
 
+-- 使用账号: alex@booktravel.com 密码: password123，提示Database error querying schema
 
+-- 1. 确保扩展开启
+create extension if not exists "pgcrypto";
+
+-- 2. 重置并强化 Trigger (确保注册新用户不出错)
+drop trigger if exists on_auth_user_created on auth.users;
+drop function if exists public.handle_new_user();
+
+create or replace function public.handle_new_user() 
+returns trigger as $$
+declare
+  username_val text;
+begin
+  username_val := new.raw_user_meta_data->>'username';
+  if username_val is null or char_length(username_val) < 1 then
+    username_val := split_part(new.email, '@', 1);
+  end if;
+
+  insert into public.profiles (id, username, avatar_url)
+  values (
+    new.id, 
+    username_val, 
+    COALESCE(new.raw_user_meta_data->>'avatar_url', 'https://ui-avatars.com/api/?name=' || username_val)
+  )
+  on conflict (id) do update set
+    username = EXCLUDED.username,
+    avatar_url = EXCLUDED.avatar_url;
+  
+  return new;
+end;
+$$ language plpgsql security definer;
+
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute procedure public.handle_new_user();
+
+-- 3. 修复 Row Level Security (RLS)
+alter table public.profiles enable row level security;
+
+-- 删除旧策略以防冲突
+drop policy if exists "Public profiles are viewable by everyone." on profiles;
+drop policy if exists "Users can insert their own profile." on profiles;
+drop policy if exists "Users can update own profile." on profiles;
+
+-- 重新应用策略
+create policy "Public profiles are viewable by everyone."
+  on profiles for select
+  using ( true );
+
+create policy "Users can insert their own profile."
+  on profiles for insert
+  with check ( auth.uid() = id );
+
+create policy "Users can update own profile."
+  on profiles for update
+  using ( auth.uid() = id );
+
+-- 4. 手动修复 Alex 账号 (如果已存在于 Auth 但不在 Profile)
+do $$
+declare
+  alex_id uuid;
+begin
+  select id into alex_id from auth.users where email = 'alex@booktravel.com';
+  
+  if alex_id is not null then
+    insert into public.profiles (id, username, avatar_url, department, bio)
+    values (alex_id, 'Alex Chen', 'https://picsum.photos/seed/me/100/100', '设计部', '热爱阅读与设计的混合体')
+    on conflict (id) do update set
+      username = 'Alex Chen',
+      department = '设计部';
+  end if;
+end $$;
+
+
+update auth.users
+set encrypted_password = crypt('password123', gen_salt('bf'))
+where email = 'alex@booktravel.com';

@@ -8,6 +8,7 @@ interface AuthProps {
 
 const Auth: React.FC<AuthProps> = ({ onLogin }) => {
   const [isLoginView, setIsLoginView] = useState(true);
+  const [isResetView, setIsResetView] = useState(false);
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     username: '',
@@ -20,17 +21,30 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
     setLoading(true);
 
     try {
-      if (isLoginView) {
-        const { error } = await authService.signIn(formData.email, formData.password);
+      if (isResetView) {
+        const { error } = await authService.resetPassword(formData.email);
         if (error) throw error;
+        alert('重置密码邮件已发送，请检查您的邮箱。');
+        setIsResetView(false);
+        setIsLoginView(true);
+      } else if (isLoginView) {
+        console.log("Attempting sign in...");
+        const { data, error } = await authService.signIn(formData.email, formData.password);
+        if (error) {
+          console.error("Sign in error:", error);
+          throw error;
+        }
+        console.log("Sign in successful:", data);
       } else {
         const { error } = await authService.signUp(formData.email, formData.password, formData.username);
         if (error) throw error;
       }
-      // Auth state change will be handled by AuthContext
-      onLogin(); // Optional: kept for compatibility
+      if (!isResetView) {
+        // Auth state change will be handled by AuthContext
+        onLogin(); // Optional: kept for compatibility
+      }
     } catch (err: any) {
-      alert(err.message || 'Authentication failed');
+      alert(err.message || '操作失败');
     } finally {
       setLoading(false);
     }
@@ -56,21 +70,21 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
         <div className="w-full bg-white/80 backdrop-blur-xl rounded-[40px] p-8 shadow-2xl border border-white/50 animate-slide-up">
           <div className="flex mb-8 bg-gray-100 rounded-2xl p-1">
             <button
-              onClick={() => setIsLoginView(true)}
-              className={`flex-1 py-3 rounded-xl text-xs font-bold transition-all ${isLoginView ? 'bg-white text-text shadow-sm' : 'text-text-muted'}`}
+              onClick={() => { setIsLoginView(true); setIsResetView(false); }}
+              className={`flex-1 py-3 rounded-xl text-xs font-bold transition-all ${isLoginView && !isResetView ? 'bg-white text-text shadow-sm' : 'text-text-muted'}`}
             >
               登录
             </button>
             <button
-              onClick={() => setIsLoginView(false)}
-              className={`flex-1 py-3 rounded-xl text-xs font-bold transition-all ${!isLoginView ? 'bg-white text-text shadow-sm' : 'text-text-muted'}`}
+              onClick={() => { setIsLoginView(false); setIsResetView(false); }}
+              className={`flex-1 py-3 rounded-xl text-xs font-bold transition-all ${!isLoginView && !isResetView ? 'bg-white text-text shadow-sm' : 'text-text-muted'}`}
             >
               注册
             </button>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-5">
-            {!isLoginView && (
+            {!isLoginView && !isResetView && (
               <div className="space-y-2 animate-fade-in">
                 <label className="text-[10px] font-bold text-text-muted uppercase tracking-widest ml-1">用户名</label>
                 <div className="relative">
@@ -102,25 +116,33 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
               </div>
             </div>
 
-            <div className="space-y-2">
-              <div className="flex justify-between items-center ml-1">
-                <label className="text-[10px] font-bold text-text-muted uppercase tracking-widest">密码</label>
-                {isLoginView && (
-                  <button type="button" className="text-[10px] font-bold text-primary uppercase">忘记密码？</button>
-                )}
+            {!isResetView && (
+              <div className="space-y-2">
+                <div className="flex justify-between items-center ml-1">
+                  <label className="text-[10px] font-bold text-text-muted uppercase tracking-widest">密码</label>
+                  {isLoginView && (
+                    <button
+                      type="button"
+                      onClick={() => setIsResetView(true)}
+                      className="text-[10px] font-bold text-primary uppercase"
+                    >
+                      忘记密码？
+                    </button>
+                  )}
+                </div>
+                <div className="relative">
+                  <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-text-muted text-lg">lock</span>
+                  <input
+                    required
+                    type="password"
+                    value={formData.password}
+                    onChange={(e) => setFormData({...formData, password: e.target.value})}
+                    className="w-full bg-background/50 border-none rounded-2xl py-4 pl-12 pr-5 outline-none focus:ring-2 focus:ring-primary/20 transition-all text-text font-bold text-sm"
+                    placeholder="••••••••"
+                  />
+                </div>
               </div>
-              <div className="relative">
-                <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-text-muted text-lg">lock</span>
-                <input
-                  required
-                  type="password"
-                  value={formData.password}
-                  onChange={(e) => setFormData({...formData, password: e.target.value})}
-                  className="w-full bg-background/50 border-none rounded-2xl py-4 pl-12 pr-5 outline-none focus:ring-2 focus:ring-primary/20 transition-all text-text font-bold text-sm"
-                  placeholder="••••••••"
-                />
-              </div>
-            </div>
+            )}
 
             <button
               type="submit"
@@ -130,9 +152,19 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
               {loading ? (
                 <span className="material-symbols-outlined animate-spin">progress_activity</span>
               ) : (
-                isLoginView ? '立即登录' : '开启旅程'
+                isResetView ? '发送重置邮件' : (isLoginView ? '立即登录' : '开启旅程')
               )}
             </button>
+
+            {isResetView && (
+              <button
+                type="button"
+                onClick={() => setIsResetView(false)}
+                className="w-full py-3 rounded-2xl bg-gray-100 text-text-muted font-bold text-xs active:scale-95 transition-all"
+              >
+                返回登录
+              </button>
+            )}
           </form>
 
           {/* Social Login */}
