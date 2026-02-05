@@ -1,0 +1,8 @@
+
+{
+  "name": "书境 BookTravel",
+  "description": "一个连接人与书的流动阅读社区，让每一本书开启它的环球旅程。",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
