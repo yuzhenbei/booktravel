@@ -1,5 +1,6 @@
 
 import React, { useState } from 'react';
+import { authService } from '../src/services/auth';
 
 interface AuthProps {
   onLogin: () => void;
@@ -14,14 +15,25 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
     password: '',
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    // Simulate API call
-    setTimeout(() => {
+
+    try {
+      if (isLoginView) {
+        const { error } = await authService.signIn(formData.email, formData.password);
+        if (error) throw error;
+      } else {
+        const { error } = await authService.signUp(formData.email, formData.password, formData.username);
+        if (error) throw error;
+      }
+      // Auth state change will be handled by AuthContext
+      onLogin(); // Optional: kept for compatibility
+    } catch (err: any) {
+      alert(err.message || 'Authentication failed');
+    } finally {
       setLoading(false);
-      onLogin();
-    }, 1500);
+    }
   };
 
   return (
@@ -43,13 +55,13 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
         {/* Auth Card */}
         <div className="w-full bg-white/80 backdrop-blur-xl rounded-[40px] p-8 shadow-2xl border border-white/50 animate-slide-up">
           <div className="flex mb-8 bg-gray-100 rounded-2xl p-1">
-            <button 
+            <button
               onClick={() => setIsLoginView(true)}
               className={`flex-1 py-3 rounded-xl text-xs font-bold transition-all ${isLoginView ? 'bg-white text-text shadow-sm' : 'text-text-muted'}`}
             >
               登录
             </button>
-            <button 
+            <button
               onClick={() => setIsLoginView(false)}
               className={`flex-1 py-3 rounded-xl text-xs font-bold transition-all ${!isLoginView ? 'bg-white text-text shadow-sm' : 'text-text-muted'}`}
             >
@@ -63,7 +75,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
                 <label className="text-[10px] font-bold text-text-muted uppercase tracking-widest ml-1">用户名</label>
                 <div className="relative">
                   <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-text-muted text-lg">person</span>
-                  <input 
+                  <input
                     required
                     type="text"
                     value={formData.username}
@@ -79,7 +91,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
               <label className="text-[10px] font-bold text-text-muted uppercase tracking-widest ml-1">邮箱或账号</label>
               <div className="relative">
                 <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-text-muted text-lg">mail</span>
-                <input 
+                <input
                   required
                   type="text"
                   value={formData.email}
@@ -99,7 +111,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
               </div>
               <div className="relative">
                 <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-text-muted text-lg">lock</span>
-                <input 
+                <input
                   required
                   type="password"
                   value={formData.password}
@@ -110,7 +122,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
               </div>
             </div>
 
-            <button 
+            <button
               type="submit"
               disabled={loading}
               className="w-full py-5 rounded-2xl bg-primary text-black font-bold text-base shadow-xl shadow-primary/20 active:scale-95 transition-all flex items-center justify-center gap-3 mt-4"

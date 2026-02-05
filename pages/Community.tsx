@@ -1,5 +1,6 @@
 
 import React, { useState } from 'react';
+import { communityService } from '../src/services/community';
 
 export interface CommentItem {
   id: string;
@@ -93,7 +94,7 @@ const Community: React.FC<CommunityProps> = ({ posts: initialPosts, onNotificati
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [activeTag, setActiveTag] = useState('全部');
-  
+
   // 互动反馈状态
   const [selectedPostForComments, setSelectedPostForComments] = useState<PostItem | null>(null);
   const [newCommentText, setNewCommentText] = useState('');
@@ -108,7 +109,7 @@ const Community: React.FC<CommunityProps> = ({ posts: initialPosts, onNotificati
   });
 
   const toggleJoinGroup = (id: string) => {
-    setGroups(prev => prev.map(g => 
+    setGroups(prev => prev.map(g =>
       g.id === id ? { ...g, isJoined: !g.isJoined, members: g.isJoined ? g.members - 1 : g.members + 1 } : g
     ));
   };
@@ -116,7 +117,7 @@ const Community: React.FC<CommunityProps> = ({ posts: initialPosts, onNotificati
   const handleCreateGroup = (e: React.FormEvent) => {
     e.preventDefault();
     setIsCreating(true);
-    
+
     setTimeout(() => {
       const newGroup: GroupItem = {
         id: `g-${Date.now()}`,
@@ -128,7 +129,7 @@ const Community: React.FC<CommunityProps> = ({ posts: initialPosts, onNotificati
         isJoined: true,
         isCreator: true
       };
-      
+
       setGroups([newGroup, ...groups]);
       setIsCreating(false);
       setShowCreateModal(false);
@@ -141,43 +142,44 @@ const Community: React.FC<CommunityProps> = ({ posts: initialPosts, onNotificati
     }, 1500);
   };
 
-  const openComments = (post: PostItem) => {
-    const postWithComments = {
-      ...post,
-      commentsList: post.commentsList || [
-        { id: 'c1', userName: '小李', avatar: 'https://picsum.photos/seed/u1/100/100', content: '很有共鸣，我也在读这一章节！', time: '1小时前' },
-        { id: 'c2', userName: '陈组长', avatar: 'https://picsum.photos/seed/u2/100/100', content: '感谢分享，这种沟通方式确实对跨部门协作很有帮助。', time: '30分钟前' }
-      ]
-    };
-    setSelectedPostForComments(postWithComments);
+  const openComments = async (post: PostItem) => {
+    // 设置选中的帖子，并显示 loading 状态（可选）
+    setSelectedPostForComments({ ...post, commentsList: [] });
+
+    try {
+      // 1. 获取真实评论
+      const comments = await communityService.getComments(post.id);
+      setSelectedPostForComments(prev => prev ? { ...prev, commentsList: comments } : null);
+    } catch (e) {
+      console.error("加载评论失败", e);
+    }
   };
 
-  const handleSendComment = () => {
+  const handleSendComment = async () => {
     if (!newCommentText.trim() || !selectedPostForComments) return;
 
-    const newComment: CommentItem = {
-      id: `comment-${Date.now()}`,
-      userName: 'Alex Chen',
-      avatar: 'https://picsum.photos/seed/me/100/100',
-      content: newCommentText,
-      time: '刚刚'
-    };
+    try {
+      const newComment = await communityService.createComment(selectedPostForComments.id, newCommentText);
 
-    const updatedCommentsList = [newComment, ...(selectedPostForComments.commentsList || [])];
-    
-    setSelectedPostForComments({
-      ...selectedPostForComments,
-      commentsList: updatedCommentsList,
-      comments: selectedPostForComments.comments + 1
-    });
+      const updatedCommentsList = [newComment, ...(selectedPostForComments.commentsList || [])];
 
-    setPosts(prev => prev.map(p => 
-      p.id === selectedPostForComments.id 
-        ? { ...p, comments: p.comments + 1, commentsList: updatedCommentsList } 
-        : p
-    ));
+      setSelectedPostForComments({
+        ...selectedPostForComments,
+        commentsList: updatedCommentsList,
+        comments: selectedPostForComments.comments + 1
+      });
 
-    setNewCommentText('');
+      setPosts(prev => prev.map(p =>
+        p.id === selectedPostForComments.id
+          ? { ...p, comments: p.comments + 1, commentsList: updatedCommentsList }
+          : p
+      ));
+
+      setNewCommentText('');
+    } catch (e) {
+      console.error("发送评论失败", e);
+      alert("发送失败，请重试");
+    }
   };
 
   const handleToggleLike = (postId: string) => {
@@ -195,7 +197,7 @@ const Community: React.FC<CommunityProps> = ({ posts: initialPosts, onNotificati
   };
 
   const handleGiftCoffee = (post: PostItem) => {
-    setPosts(prev => prev.map(p => 
+    setPosts(prev => prev.map(p =>
       p.id === post.id ? { ...p, hasCoffee: true } : p
     ));
     setCoffeeSuccessPost(post);
@@ -223,7 +225,7 @@ const Community: React.FC<CommunityProps> = ({ posts: initialPosts, onNotificati
             <img src="https://picsum.photos/seed/me/100/100" className="size-8 rounded-full" alt="" />
           </div>
           <h1 className="text-text text-lg font-bold flex-1 text-center">书友圈</h1>
-          <button 
+          <button
             onClick={onNotificationClick}
             className="relative w-10 h-10 flex items-center justify-center active:scale-90 transition-transform"
           >
@@ -234,7 +236,7 @@ const Community: React.FC<CommunityProps> = ({ posts: initialPosts, onNotificati
           </button>
         </div>
         <div className="flex px-4 gap-8">
-          <button 
+          <button
             onClick={() => setActiveTab('posts')}
             className={`border-b-[3px] pb-3 pt-1 text-sm font-bold transition-all ${
               activeTab === 'posts' ? 'border-primary text-text' : 'border-transparent text-text-muted'
@@ -242,7 +244,7 @@ const Community: React.FC<CommunityProps> = ({ posts: initialPosts, onNotificati
           >
             动态
           </button>
-          <button 
+          <button
             onClick={() => setActiveTab('groups')}
             className={`border-b-[3px] pb-3 pt-1 text-sm font-bold transition-all ${
               activeTab === 'groups' ? 'border-primary text-text' : 'border-transparent text-text-muted'
@@ -258,12 +260,12 @@ const Community: React.FC<CommunityProps> = ({ posts: initialPosts, onNotificati
           {/* 顶部标签过滤栏 */}
           <div className="p-4 flex gap-3 overflow-x-auto no-scrollbar">
             {COMMUNITY_TAGS.map((tag) => (
-              <button 
+              <button
                 key={tag}
                 onClick={() => handleTagClick(tag)}
                 className={`flex h-8 shrink-0 items-center px-4 rounded-xl text-xs font-bold shadow-sm whitespace-nowrap transition-all active:scale-95 ${
-                  activeTag === tag 
-                    ? 'bg-primary text-black border border-primary/20' 
+                  activeTag === tag
+                    ? 'bg-primary text-black border border-primary/20'
                     : 'bg-white text-text-muted border border-gray-100'
                 }`}
               >
@@ -292,7 +294,7 @@ const Community: React.FC<CommunityProps> = ({ posts: initialPosts, onNotificati
                         )}
                         {/* 动态卡片内可点击标签 */}
                         {post.tag && (
-                          <button 
+                          <button
                             onClick={() => handleTagClick(post.tag!)}
                             className="ml-2 text-primary text-[10px] font-bold px-1.5 py-0.5 bg-primary/5 rounded border border-primary/10 hover:bg-primary/20 transition-colors"
                           >
@@ -308,7 +310,7 @@ const Community: React.FC<CommunityProps> = ({ posts: initialPosts, onNotificati
                       </div>
                     )}
                   </div>
-                  
+
                   <div className="px-4 relative group">
                     <div className="grid grid-cols-2 gap-2 h-44 cursor-pointer" onDoubleClick={() => handleToggleLike(post.id)}>
                       <img src={post.image1} className="w-full h-full object-cover rounded-xl shadow-inner border border-gray-50" alt="" />
@@ -333,14 +335,14 @@ const Community: React.FC<CommunityProps> = ({ posts: initialPosts, onNotificati
 
                   <div className="px-4 py-3 border-t border-gray-50 flex items-center justify-between">
                     <div className="flex gap-5">
-                      <button 
+                      <button
                         onClick={() => handleToggleLike(post.id)}
                         className={`flex items-center gap-1.5 transition-all group active:scale-125 ${post.isLiked ? 'text-red-500' : 'text-text-muted'}`}
                       >
                         <span className={`material-symbols-outlined text-[20px] ${post.isLiked ? 'fill-icon animate-pop' : ''}`}>favorite</span>
                         <span className="text-xs font-bold">{post.likes}</span>
                       </button>
-                      <button 
+                      <button
                         onClick={() => openComments(post)}
                         className="flex items-center gap-1.5 text-text-muted group active:scale-90"
                       >
@@ -348,7 +350,7 @@ const Community: React.FC<CommunityProps> = ({ posts: initialPosts, onNotificati
                         <span className="text-xs font-bold">{post.comments}</span>
                       </button>
                     </div>
-                    <button 
+                    <button
                       onClick={() => handleGiftCoffee(post)}
                       className="flex items-center gap-1.5 px-4 h-9 bg-primary text-black rounded-full text-xs font-bold shadow-lg shadow-primary/20 active:scale-95 transition-all disabled:opacity-50"
                     >
@@ -365,8 +367,8 @@ const Community: React.FC<CommunityProps> = ({ posts: initialPosts, onNotificati
                 </div>
                 <p className="text-sm font-bold text-text-muted">该分类下暂无动态</p>
                 <p className="text-[10px] text-text-muted/60 mt-1">换个话题看看吧</p>
-                <button 
-                  onClick={() => setActiveTag('全部')} 
+                <button
+                  onClick={() => setActiveTag('全部')}
                   className="mt-6 px-6 py-2 bg-primary/10 text-primary text-xs font-bold rounded-full border border-primary/20 active:scale-95 transition-all"
                 >
                   查看全部动态
@@ -381,10 +383,10 @@ const Community: React.FC<CommunityProps> = ({ posts: initialPosts, onNotificati
             <h2 className="text-text text-xl font-bold">推荐小组</h2>
             <button className="text-primary text-xs font-bold">查看更多</button>
           </div>
-          
+
           <div className="grid grid-cols-1 gap-4">
             {groups.map((group) => (
-              <div 
+              <div
                 key={group.id}
                 className="bg-white rounded-[24px] overflow-hidden border border-gray-100 shadow-sm flex flex-col animate-slide-up relative"
               >
@@ -412,11 +414,11 @@ const Community: React.FC<CommunityProps> = ({ posts: initialPosts, onNotificati
                     <span className="text-primary font-bold not-italic mr-1">TOPIC:</span>
                     {group.activeTopic}
                   </p>
-                  <button 
+                  <button
                     onClick={() => toggleJoinGroup(group.id)}
                     className={`w-full py-3.5 rounded-xl font-bold text-sm transition-all active:scale-[0.98] ${
-                      group.isJoined 
-                        ? 'bg-gray-100 text-text-muted' 
+                      group.isJoined
+                        ? 'bg-gray-100 text-text-muted'
                         : 'bg-primary text-black shadow-lg shadow-primary/20'
                     }`}
                   >
@@ -431,7 +433,7 @@ const Community: React.FC<CommunityProps> = ({ posts: initialPosts, onNotificati
             <span className="material-symbols-outlined text-4xl text-primary mb-3">groups_3</span>
             <h4 className="text-text font-bold text-base mb-1">找不到心仪的小组？</h4>
             <p className="text-text-muted text-xs mb-4">创建属于你和书友们的同路人空间</p>
-            <button 
+            <button
               onClick={() => setShowCreateModal(true)}
               className="px-6 py-2.5 bg-white border border-primary/20 text-primary rounded-full text-xs font-bold active:scale-95 transition-all shadow-sm"
             >
@@ -457,7 +459,7 @@ const Community: React.FC<CommunityProps> = ({ posts: initialPosts, onNotificati
               <p className="text-[10px] font-bold text-amber-600 uppercase tracking-widest mb-1 italic">书友留言</p>
               <p className="text-xs text-amber-800/80">“一本书，一杯咖啡，就是最好的午后。谢谢你的礼物！”</p>
             </div>
-            <button 
+            <button
               onClick={() => setCoffeeSuccessPost(null)}
               className="w-full mt-8 py-4 bg-amber-500 text-white rounded-2xl font-bold shadow-lg shadow-amber-500/20 active:scale-95 transition-all"
             >
@@ -470,12 +472,12 @@ const Community: React.FC<CommunityProps> = ({ posts: initialPosts, onNotificati
       {/* 评论抽屉 (Comments Drawer) */}
       {selectedPostForComments && (
         <div className="fixed inset-0 z-[100] bg-black/40 backdrop-blur-sm flex items-end animate-fade-in" onClick={() => setSelectedPostForComments(null)}>
-          <div 
-            className="w-full bg-white rounded-t-[32px] animate-slide-up flex flex-col shadow-2xl overflow-hidden h-[80vh]" 
+          <div
+            className="w-full bg-white rounded-t-[32px] animate-slide-up flex flex-col shadow-2xl overflow-hidden h-[80vh]"
             onClick={e => e.stopPropagation()}
           >
             <div className="w-12 h-1.5 bg-gray-200 rounded-full mx-auto my-4 shrink-0"></div>
-            
+
             <header className="px-6 pb-4 border-b border-gray-50 flex items-center justify-between">
               <div>
                 <h2 className="text-text text-lg font-bold">书友感悟评论</h2>
@@ -483,7 +485,7 @@ const Community: React.FC<CommunityProps> = ({ posts: initialPosts, onNotificati
                    针对《{selectedPostForComments.bookTitle}》
                 </p>
               </div>
-              <button 
+              <button
                 onClick={() => setSelectedPostForComments(null)}
                 className="w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center"
               >
@@ -521,14 +523,14 @@ const Community: React.FC<CommunityProps> = ({ posts: initialPosts, onNotificati
 
             <div className="p-4 border-t border-gray-50 bg-white sticky bottom-0">
               <div className="flex items-center gap-3 bg-background rounded-2xl px-4 h-12 border border-transparent focus-within:border-primary/30 transition-all">
-                <input 
+                <input
                   value={newCommentText}
                   onChange={e => setNewCommentText(e.target.value)}
                   onKeyPress={e => e.key === 'Enter' && handleSendComment()}
-                  className="flex-1 bg-transparent border-none focus:ring-0 text-sm outline-none text-text" 
-                  placeholder="写下你的共鸣..." 
+                  className="flex-1 bg-transparent border-none focus:ring-0 text-sm outline-none text-text"
+                  placeholder="写下你的共鸣..."
                 />
-                <button 
+                <button
                   onClick={handleSendComment}
                   disabled={!newCommentText.trim()}
                   className="text-primary font-bold text-sm disabled:opacity-30 transition-all"
@@ -556,7 +558,7 @@ const Community: React.FC<CommunityProps> = ({ posts: initialPosts, onNotificati
             <div className="space-y-6">
               <div className="space-y-3">
                 <label className="text-[10px] font-bold text-text-muted uppercase tracking-widest ml-1">小组封面</label>
-                <div 
+                <div
                   className="w-full h-44 rounded-3xl overflow-hidden relative group cursor-pointer"
                   onClick={() => setCreateFormData({...createFormData, cover: `https://picsum.photos/seed/${Math.random()}/400/300`})}
                 >
@@ -572,7 +574,7 @@ const Community: React.FC<CommunityProps> = ({ posts: initialPosts, onNotificati
 
               <div className="space-y-2">
                 <label className="text-[10px] font-bold text-text-muted uppercase tracking-widest ml-1">小组名称</label>
-                <input 
+                <input
                   required
                   maxLength={20}
                   value={createFormData.name}
@@ -591,8 +593,8 @@ const Community: React.FC<CommunityProps> = ({ posts: initialPosts, onNotificati
                       type="button"
                       onClick={() => setCreateFormData({...createFormData, tag: cat})}
                       className={`px-4 py-2 rounded-xl text-xs font-bold transition-all border ${
-                        createFormData.tag === cat 
-                          ? 'bg-primary border-primary text-black shadow-md shadow-primary/10' 
+                        createFormData.tag === cat
+                          ? 'bg-primary border-primary text-black shadow-md shadow-primary/10'
                           : 'bg-white border-gray-100 text-text-muted'
                       }`}
                     >
@@ -604,7 +606,7 @@ const Community: React.FC<CommunityProps> = ({ posts: initialPosts, onNotificati
 
               <div className="space-y-2">
                 <label className="text-[10px] font-bold text-text-muted uppercase tracking-widest ml-1">初始活跃话题</label>
-                <textarea 
+                <textarea
                   value={createFormData.topic}
                   onChange={e => setCreateFormData({...createFormData, topic: e.target.value})}
                   className="w-full bg-background border-none rounded-2xl py-4 px-5 outline-none focus:ring-2 focus:ring-primary/20 transition-all text-text text-sm h-32 resize-none"
@@ -613,7 +615,7 @@ const Community: React.FC<CommunityProps> = ({ posts: initialPosts, onNotificati
               </div>
             </div>
 
-            <button 
+            <button
               type="submit"
               disabled={!createFormData.name || isCreating}
               className="w-full py-5 rounded-2xl bg-primary text-black font-bold text-base shadow-xl shadow-primary/20 active:scale-95 transition-all flex items-center justify-center gap-3 disabled:opacity-50"
@@ -633,7 +635,7 @@ const Community: React.FC<CommunityProps> = ({ posts: initialPosts, onNotificati
           </form>
         </div>
       )}
-      
+
       <style>{`
         .animate-fade-in { animation: fadeIn 0.3s ease-out; }
         .animate-slide-up { animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1); }

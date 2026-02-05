@@ -1,6 +1,9 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useAuth } from '../src/contexts/AuthContext';
+import { bookService } from '../src/services/books';
 import { MOCK_BOOKS, MOCK_RECOMMENDATIONS } from '../constants';
+import { Book } from '../types';
 
 interface DiscoveryProps {
   onBookClick: (id: string) => void;
@@ -9,13 +12,32 @@ interface DiscoveryProps {
 }
 
 const Discovery: React.FC<DiscoveryProps> = ({ onBookClick, onNotificationClick, hasUnread }) => {
+  const { user } = useAuth();
+  const userName = user?.user_metadata?.username || user?.email?.split('@')[0] || '书友';
+  const avatarUrl = user?.user_metadata?.avatar_url || `https://ui-avatars.com/api/?name=${userName}`;
+
   const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
+  const [books, setBooks] = useState<Book[]>(MOCK_BOOKS);
+
+  useEffect(() => {
+    const fetchBooks = async () => {
+      try {
+        const data = await bookService.getAllBooks();
+        if (data && data.length > 0) {
+          setBooks(data);
+        }
+      } catch (e) {
+        console.error("Failed to load books", e);
+      }
+    };
+    fetchBooks();
+  }, []);
 
   // 模拟楼层坐标数据
   const mapPoints = [
-    { id: '1', top: '25%', left: '30%', label: '4F 产品部', book: MOCK_BOOKS[0] },
-    { id: '2', top: '65%', left: '70%', label: '2F 人力资源部', book: MOCK_BOOKS[1] },
-    { id: '3', top: '40%', left: '60%', label: '5F 技术部', book: MOCK_BOOKS[2] },
+    { id: '1', top: '25%', left: '30%', label: '4F 产品部', book: books[0] || MOCK_BOOKS[0] },
+    { id: '2', top: '65%', left: '70%', label: '2F 人力资源部', book: books[1] || MOCK_BOOKS[1] },
+    { id: '3', top: '40%', left: '60%', label: '5F 技术部', book: books[2] || MOCK_BOOKS[2] },
   ];
 
   return (
@@ -23,11 +45,11 @@ const Discovery: React.FC<DiscoveryProps> = ({ onBookClick, onNotificationClick,
       <header className="px-4 py-4 flex items-center justify-between sticky top-0 bg-background/80 backdrop-blur-md z-10">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center overflow-hidden border border-primary/10">
-             <img src="https://picsum.photos/seed/user/100/100" className="w-8 h-8 rounded-full" />
+             <img src={avatarUrl} className="w-8 h-8 rounded-full" />
           </div>
           <h2 className="text-text text-lg font-bold tracking-tight">书境 BookTravel</h2>
         </div>
-        <button 
+        <button
           onClick={onNotificationClick}
           className="w-10 h-10 flex items-center justify-center rounded-full bg-white text-text relative active:scale-90 transition-transform"
         >
@@ -40,16 +62,16 @@ const Discovery: React.FC<DiscoveryProps> = ({ onBookClick, onNotificationClick,
 
       <section className="px-4 pt-4 pb-2">
         <h1 className="text-text tracking-tight text-2xl font-bold leading-tight">
-          早安，Alex。<br />开启你的下一段阅读旅程吗？
+          早安，{userName}。<br />开启你的下一段阅读旅程吗？
         </h1>
       </section>
 
       <div className="px-4 py-4">
         <div className="flex w-full items-center bg-white rounded-xl shadow-sm h-12 border border-gray-100 px-4">
           <span className="material-symbols-outlined text-text-muted">search</span>
-          <input 
-            className="flex-1 bg-transparent border-none focus:ring-0 placeholder:text-text-muted text-base ml-2" 
-            placeholder="搜索书籍或旅行昵称" 
+          <input
+            className="flex-1 bg-transparent border-none focus:ring-0 placeholder:text-text-muted text-base ml-2"
+            placeholder="搜索书籍或旅行昵称"
           />
         </div>
       </div>
@@ -57,7 +79,7 @@ const Discovery: React.FC<DiscoveryProps> = ({ onBookClick, onNotificationClick,
       <div className="flex items-center justify-between px-4 pt-4 pb-3">
         <h2 className="text-text text-xl font-bold">正在旅行的书</h2>
         <div className="flex bg-gray-100 p-1 rounded-lg">
-          <button 
+          <button
             onClick={() => setViewMode('list')}
             className={`px-3 py-1 rounded-md text-[10px] font-bold shadow-sm flex items-center gap-1 transition-all ${
               viewMode === 'list' ? 'bg-white text-text' : 'text-text-muted'
@@ -65,7 +87,7 @@ const Discovery: React.FC<DiscoveryProps> = ({ onBookClick, onNotificationClick,
           >
             <span className="material-symbols-outlined text-[16px]">list</span> 列表
           </button>
-          <button 
+          <button
             onClick={() => setViewMode('map')}
             className={`px-3 py-1 rounded-md text-[10px] font-bold flex items-center gap-1 transition-all ${
               viewMode === 'map' ? 'bg-white text-text shadow-sm' : 'text-text-muted'
@@ -78,9 +100,9 @@ const Discovery: React.FC<DiscoveryProps> = ({ onBookClick, onNotificationClick,
 
       {viewMode === 'list' ? (
         <div className="flex overflow-x-auto px-4 pb-6 gap-4 no-scrollbar">
-          {MOCK_BOOKS.map((book) => (
-            <div 
-              key={book.id} 
+          {books.map((book) => (
+            <div
+              key={book.id}
               onClick={() => onBookClick(book.id)}
               className="flex-none w-44 bg-white rounded-xl border border-gray-100 overflow-hidden shadow-sm active:scale-95 transition-transform animate-slide-up"
             >
@@ -115,11 +137,11 @@ const Discovery: React.FC<DiscoveryProps> = ({ onBookClick, onNotificationClick,
         <div className="px-4 pb-6 animate-fade-in">
           <div className="relative w-full aspect-[4/3] bg-white rounded-3xl overflow-hidden border border-gray-100 shadow-inner">
             {/* 模拟室内地图背景 */}
-            <div className="absolute inset-0 opacity-10 pointer-events-none" style={{ 
-              backgroundImage: 'radial-gradient(#13ec92 0.5px, transparent 0.5px)', 
-              backgroundSize: '20px 20px' 
+            <div className="absolute inset-0 opacity-10 pointer-events-none" style={{
+              backgroundImage: 'radial-gradient(#13ec92 0.5px, transparent 0.5px)',
+              backgroundSize: '20px 20px'
             }}></div>
-            
+
             {/* 模拟楼层划分线 */}
             <svg className="absolute inset-0 w-full h-full opacity-5 pointer-events-none" preserveAspectRatio="none">
               <path d="M 0 50 Q 250 80 500 50" stroke="currentColor" fill="none" />
@@ -129,13 +151,13 @@ const Discovery: React.FC<DiscoveryProps> = ({ onBookClick, onNotificationClick,
 
             {/* 地图标注点 */}
             {mapPoints.map(point => (
-              <div 
+              <div
                 key={point.id}
                 className="absolute group transition-all"
                 style={{ top: point.top, left: point.left }}
               >
                 {/* 锚点标记 */}
-                <div 
+                <div
                   onClick={() => onBookClick(point.book.id)}
                   className="relative cursor-pointer"
                 >
@@ -168,7 +190,7 @@ const Discovery: React.FC<DiscoveryProps> = ({ onBookClick, onNotificationClick,
                 <span className="text-[10px] font-bold text-text-muted">3 本书籍正开放申请</span>
               </div>
             </div>
-            
+
             <div className="absolute top-4 right-4 bg-white/80 backdrop-blur-sm p-2 rounded-2xl border border-gray-50 shadow-sm flex flex-col gap-2">
                <button className="size-8 rounded-xl bg-white flex items-center justify-center shadow-sm text-text-muted hover:text-primary transition-colors">
                   <span className="material-symbols-outlined">add</span>
@@ -185,7 +207,7 @@ const Discovery: React.FC<DiscoveryProps> = ({ onBookClick, onNotificationClick,
         <h2 className="text-text text-xl font-bold mb-4">大佬推荐</h2>
         <div className="space-y-4 pb-6">
           {MOCK_RECOMMENDATIONS.map((book) => (
-            <div 
+            <div
               key={book.id}
               onClick={() => onBookClick(book.id)}
               className="flex gap-4 bg-white p-3 rounded-xl border border-gray-100 shadow-sm active:scale-[0.98] transition-all"
@@ -219,9 +241,9 @@ const Discovery: React.FC<DiscoveryProps> = ({ onBookClick, onNotificationClick,
         .animate-fade-in { animation: fadeIn 0.3s ease-out; }
         .animate-slide-up { animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-        @keyframes slideUp { 
-          from { transform: translateY(20px); opacity: 0; } 
-          to { transform: translateY(0); opacity: 1; } 
+        @keyframes slideUp {
+          from { transform: translateY(20px); opacity: 0; }
+          to { transform: translateY(0); opacity: 1; }
         }
       `}</style>
     </div>

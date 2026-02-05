@@ -1,6 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { NavTab } from './types';
+import { useAuth } from './src/contexts/AuthContext';
+import { communityService } from './src/services/community';
 import Discovery from './pages/Discovery';
 import Shelf from './pages/Shelf';
 import Station from './pages/Station';
@@ -10,11 +12,25 @@ import Notifications, { NotificationItem } from './pages/Notifications';
 import Auth from './pages/Auth';
 
 const App: React.FC = () => {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const { user, loading, signOut } = useAuth();
   const [activeTab, setActiveTab] = useState<NavTab>(NavTab.Discovery);
   const [selectedBookId, setSelectedBookId] = useState<string | null>(null);
   const [showNotifications, setShowNotifications] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'info' } | null>(null);
+
+  useEffect(() => {
+    if (user) {
+      const fetchPosts = async () => {
+        try {
+          const data = await communityService.getPosts();
+          if (data && data.length > 0) setPosts(data);
+        } catch (e) {
+          console.error("Failed to load posts", e);
+        }
+      };
+      fetchPosts();
+    }
+  }, [user]);
 
   const [notifications, setNotifications] = useState<NotificationItem[]>([
     {
@@ -130,15 +146,19 @@ const App: React.FC = () => {
 
   const handleNotificationOpen = () => setShowNotifications(true);
 
-  if (!isLoggedIn) {
-    return <Auth onLogin={() => setIsLoggedIn(true)} />;
+  if (loading) {
+    return <div className="min-h-screen flex items-center justify-center bg-background"><span className="material-symbols-outlined animate-spin text-primary text-4xl">sync</span></div>;
+  }
+
+  if (!user) {
+    return <Auth onLogin={() => {}} />;
   }
 
   const renderContent = () => {
     if (showNotifications) {
       return (
-        <Notifications 
-          onBack={() => setShowNotifications(false)} 
+        <Notifications
+          onBack={() => setShowNotifications(false)}
           notifications={notifications}
           markRead={markRead}
           markAllRead={markAllRead}
@@ -148,9 +168,9 @@ const App: React.FC = () => {
 
     if (selectedBookId) {
       return (
-        <BookPassport 
-          bookId={selectedBookId} 
-          onBack={() => setSelectedBookId(null)} 
+        <BookPassport
+          bookId={selectedBookId}
+          onBack={() => setSelectedBookId(null)}
           onShare={addPost}
         />
       );
@@ -159,9 +179,9 @@ const App: React.FC = () => {
     switch (activeTab) {
       case NavTab.Discovery:
         return (
-          <Discovery 
-            onBookClick={setSelectedBookId} 
-            onNotificationClick={handleNotificationOpen} 
+          <Discovery
+            onBookClick={setSelectedBookId}
+            onNotificationClick={handleNotificationOpen}
             hasUnread={unreadCount > 0}
           />
         );
@@ -169,28 +189,28 @@ const App: React.FC = () => {
         return <Shelf onBookClick={setSelectedBookId} />;
       case NavTab.Station:
         return (
-          <Station 
-            onBookClick={setSelectedBookId} 
-            onNotificationClick={handleNotificationOpen} 
+          <Station
+            onBookClick={setSelectedBookId}
+            onNotificationClick={handleNotificationOpen}
             hasUnread={unreadCount > 0}
             addNotification={addNotification}
             onShare={addPost}
-            onLogout={() => setIsLoggedIn(false)}
+            onLogout={signOut}
           />
         );
       case NavTab.Community:
         return (
-          <Community 
-            posts={posts} 
-            onNotificationClick={handleNotificationOpen} 
-            hasUnread={unreadCount > 0} 
+          <Community
+            posts={posts}
+            onNotificationClick={handleNotificationOpen}
+            hasUnread={unreadCount > 0}
           />
         );
       default:
         return (
-          <Discovery 
-            onBookClick={setSelectedBookId} 
-            onNotificationClick={handleNotificationOpen} 
+          <Discovery
+            onBookClick={setSelectedBookId}
+            onNotificationClick={handleNotificationOpen}
             hasUnread={unreadCount > 0}
           />
         );

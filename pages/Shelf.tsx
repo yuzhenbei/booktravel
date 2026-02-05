@@ -1,5 +1,7 @@
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { bookService } from '../src/services/books';
+import { Book } from '../types';
 
 interface ShelfBook {
   id: string;
@@ -31,12 +33,31 @@ const Shelf: React.FC<ShelfProps> = ({ onBookClick }) => {
   const [sortKey, setSortKey] = useState<SortKey>('date');
   const [isScanning, setIsScanning] = useState(false);
 
-  const [allBooks, setAllBooks] = useState<ShelfBook[]>([
-    { id: 'c1', title: '设计心理学', author: '唐纳德·诺曼', type: 'corporate', category: '心理', location: '3F 休闲驿站', status: 'available', cover: 'https://picsum.photos/seed/shelfcorporate1/400/600', createdAt: 1704067200000 },
-    { id: 'c2', title: '原子习惯', author: 'James Clear', type: 'corporate', category: '心理', location: '1F 大厅', status: 'available', cover: 'https://picsum.photos/seed/shelfcorporate2/400/600', createdAt: 1706745600000 },
-    { id: 'c3', title: '创新自信力', author: '汤姆·凯利', type: 'corporate', category: '经管', location: '2F 讨论区', status: 'traveling', cover: 'https://picsum.photos/seed/shelfcorporate3/400/600', createdAt: 1709251200000 },
-    { id: 'p1', title: '午夜图书馆', author: 'Matt Haig', type: 'personal', category: '文学', location: '我的桌面', status: 'available', cover: 'https://picsum.photos/seed/shelfpersonal1/400/600', createdAt: 1714521600000 },
-  ]);
+  const [allBooks, setAllBooks] = useState<ShelfBook[]>([]);
+
+  useEffect(() => {
+    const loadBooks = async () => {
+      try {
+        const books = await bookService.getAllBooks();
+        // Transform backend books to ShelfBook format
+        const shelfBooks: ShelfBook[] = books.map(b => ({
+          id: b.id,
+          title: b.title,
+          author: b.author,
+          type: 'personal', // 默认全视为个人共享，或者你可以根据 owner_id 判断
+          category: '文学', // 数据库目前没有 category 字段，暂用默认
+          location: b.location,
+          status: b.status,
+          cover: b.cover,
+          createdAt: Date.now() // 数据库暂时没返回 created_at，排序暂忽略
+        }));
+        setAllBooks(shelfBooks);
+      } catch (e) {
+        console.error("加载书架失败", e);
+      }
+    };
+    loadBooks();
+  }, [showAddModal]); // 每次关闭 Modal (可能添加了新书) 重新加载
 
   const [formData, setFormData] = useState({ title: '', author: '', category: '文学', cover: '' });
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -66,7 +87,7 @@ const Shelf: React.FC<ShelfProps> = ({ onBookClick }) => {
 
     const hash = getHash(title || 'BookTravel');
     const hue = Math.abs(hash % 360);
-    
+
     const gradient = ctx.createLinearGradient(0, 0, 400, 600);
     gradient.addColorStop(0, `hsl(${hue}, 70%, 85%)`);
     gradient.addColorStop(1, `hsl(${(hue + 40) % 360}, 60%, 75%)`);
@@ -89,7 +110,7 @@ const Shelf: React.FC<ShelfProps> = ({ onBookClick }) => {
 
     ctx.fillStyle = '#111815';
     ctx.textAlign = 'center';
-    
+
     const displayTitle = title || '书名占位符';
     const words = displayTitle.split('');
     let line = '';
@@ -97,7 +118,7 @@ const Shelf: React.FC<ShelfProps> = ({ onBookClick }) => {
     const lineHeight = 55;
 
     ctx.font = 'bold 44px PingFang SC, sans-serif';
-    
+
     for (let n = 0; n < words.length; n++) {
       const testLine = line + words[n];
       const metrics = ctx.measureText(testLine);
@@ -139,7 +160,7 @@ const Shelf: React.FC<ShelfProps> = ({ onBookClick }) => {
     let result = allBooks.filter(book => {
       const matchType = book.type === activeSegment;
       const matchCategory = activeCategory === '全部' || book.category === activeCategory;
-      const matchSearch = book.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
+      const matchSearch = book.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
                           book.author.toLowerCase().includes(searchQuery.toLowerCase());
       return matchType && matchCategory && matchSearch;
     });
@@ -155,34 +176,37 @@ const Shelf: React.FC<ShelfProps> = ({ onBookClick }) => {
   const handleScan = () => {
     setIsScanning(true);
     setTimeout(() => {
-      setFormData(prev => ({ 
-        ...prev, 
-        title: '人类简史', 
-        author: '尤瓦尔·赫拉利', 
-        category: '科普' 
+      setFormData(prev => ({
+        ...prev,
+        title: '人类简史',
+        author: '尤瓦尔·赫拉利',
+        category: '科普'
       }));
       setIsScanning(false);
     }, 1500);
   };
 
-  const handleAddBook = (e: React.FormEvent) => {
+  const handleAddBook = async (e: React.FormEvent) => {
     e.preventDefault();
-    const newBook: ShelfBook = {
-      id: `p-${Date.now()}`,
-      title: formData.title,
-      author: formData.author,
-      type: 'personal',
-      category: formData.category,
-      location: '待定',
-      status: 'available',
-      cover: formData.cover || `https://picsum.photos/seed/${Date.now()}/400/600`,
-      createdAt: Date.now()
-    };
-    setAllBooks([newBook, ...allBooks]);
-    setShowAddModal(false);
-    setFormData({ title: '', author: '', category: '文学', cover: '' });
-    setActiveSegment('personal');
-    setActiveCategory('全部');
+
+    try {
+      const newBook = {
+        title: formData.title,
+        author: formData.author,
+        cover: formData.cover || `https://picsum.photos/seed/${Date.now()}/400/600`,
+        nickname: `爱书人-${Math.floor(Math.random() * 100)}` // 自动生成一个昵称
+      };
+
+      await bookService.createBook(newBook);
+
+      alert('上架成功！');
+      setShowAddModal(false);
+      setFormData({ title: '', author: '', category: '文学', cover: '' });
+      setActiveSegment('personal'); // 切换到个人 Tab 查看新书
+    } catch (e: any) {
+      console.error(e);
+      alert(e.message || '上架失败');
+    }
   };
 
   const sortOptions = [
@@ -194,7 +218,7 @@ const Shelf: React.FC<ShelfProps> = ({ onBookClick }) => {
   return (
     <div className="animate-fade-in pb-20">
       <canvas ref={canvasRef} width="400" height="600" className="hidden" />
-      
+
       <header className="px-4 py-4 flex items-center justify-between sticky top-0 bg-background/80 backdrop-blur-md z-10">
         {!isSearching ? (
           <>
@@ -210,12 +234,12 @@ const Shelf: React.FC<ShelfProps> = ({ onBookClick }) => {
           <div className="flex items-center gap-3 w-full animate-fade-in">
             <div className="flex-1 flex items-center bg-white rounded-full h-10 px-4 shadow-inner border border-gray-100">
               <span className="material-symbols-outlined text-text-muted text-lg">search</span>
-              <input 
+              <input
                 autoFocus
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="bg-transparent border-none focus:ring-0 text-sm ml-2 flex-1 outline-none" 
-                placeholder="搜索标题、作者..." 
+                className="bg-transparent border-none focus:ring-0 text-sm ml-2 flex-1 outline-none"
+                placeholder="搜索标题、作者..."
               />
               {searchQuery && (
                 <button onClick={() => setSearchQuery('')}>
@@ -275,7 +299,7 @@ const Shelf: React.FC<ShelfProps> = ({ onBookClick }) => {
                   {book.category}
                 </div>
                 <div className="absolute bottom-2 right-2 bg-white/90 backdrop-blur-sm px-2 py-1 rounded-full text-[9px] font-bold text-text flex items-center gap-1 shadow-sm">
-                  <span className={`size-1.5 rounded-full ${book.status === 'available' ? 'bg-primary' : 'bg-orange-400'}`}></span> 
+                  <span className={`size-1.5 rounded-full ${book.status === 'available' ? 'bg-primary' : 'bg-orange-400'}`}></span>
                   {book.status === 'available' ? '在架' : '流通中'}
                 </div>
               </div>
@@ -285,7 +309,7 @@ const Shelf: React.FC<ShelfProps> = ({ onBookClick }) => {
                   <span className="material-symbols-outlined text-xs">location_on</span>
                   {book.location}
                 </p>
-                
+
                 {/* 流通进度可视化 */}
                 {book.status === 'traveling' && (
                   <div className="mt-2 space-y-1.5">
@@ -294,7 +318,7 @@ const Shelf: React.FC<ShelfProps> = ({ onBookClick }) => {
                       <span className="text-[9px] font-bold text-text-muted">{progress}%</span>
                     </div>
                     <div className="w-full h-1 bg-gray-100 rounded-full overflow-hidden relative">
-                      <div 
+                      <div
                         className="h-full bg-gradient-to-r from-orange-300 to-orange-500 rounded-full transition-all duration-1000 ease-out"
                         style={{ width: `${progress}%` }}
                       >
@@ -374,7 +398,7 @@ const Shelf: React.FC<ShelfProps> = ({ onBookClick }) => {
                 <form onSubmit={handleAddBook} className="space-y-6 pb-10">
                   <div className="space-y-2">
                     <label className="text-[10px] font-bold text-text-muted uppercase tracking-widest ml-1">书名</label>
-                    <input 
+                    <input
                       required
                       value={formData.title}
                       onChange={e => setFormData({...formData, title: e.target.value})}
@@ -384,7 +408,7 @@ const Shelf: React.FC<ShelfProps> = ({ onBookClick }) => {
                   </div>
                   <div className="space-y-2">
                     <label className="text-[10px] font-bold text-text-muted uppercase tracking-widest ml-1">作者</label>
-                    <input 
+                    <input
                       required
                       value={formData.author}
                       onChange={e => setFormData({...formData, author: e.target.value})}

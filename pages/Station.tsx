@@ -1,5 +1,7 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { useAuth } from '../src/contexts/AuthContext';
+import { authService } from '../src/services/auth';
 import { NotificationItem } from './Notifications';
 import { PostItem } from './Community';
 
@@ -46,15 +48,16 @@ interface StationProps {
 }
 
 const Station: React.FC<StationProps> = ({ onBookClick, onNotificationClick, hasUnread, addNotification, onShare, onLogout }) => {
+  const { user: authUser } = useAuth();
   const [activeSubTab, setActiveSubTab] = useState<'hosting' | 'circulated'>('hosting');
   const [showHandover, setShowHandover] = useState(false);
   const [handoverStep, setHandoverStep] = useState<'form' | 'processing' | 'success'>('form');
-  
+
   const [showMedalsGallery, setShowMedalsGallery] = useState(false);
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [selectedMedal, setSelectedMedal] = useState<Medal | null>(null);
-  
+
   const [selectedBookIndex, setSelectedBookIndex] = useState<number | null>(null);
   const [isSearching, setIsSearching] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -63,15 +66,47 @@ const Station: React.FC<StationProps> = ({ onBookClick, onNotificationClick, has
   const [shareContent, setShareContent] = useState('');
 
   const [user, setUser] = useState({
-    name: 'Alex Chen',
-    role: '高级产品经理',
+    name: '加载中...',
+    role: '高级产品经理', // Mock default
     avatar: 'https://picsum.photos/seed/me/200/200',
-    level: 5,
-    title: '首席驿站',
+    level: 1,
+    title: '初级书虫',
     bio: '爱书、爱旅行、爱分享。希望每一本书都能找到它的归属。'
   });
 
+  useEffect(() => {
+    const loadProfile = async () => {
+      if (authUser) {
+        // 先尝试从 auth metadata 获取
+        const metadata = authUser.user_metadata;
+        setUser(prev => ({
+          ...prev,
+          name: metadata.username || authUser.email?.split('@')[0] || '书友',
+          avatar: metadata.avatar_url || prev.avatar
+        }));
+
+        // 也可以从 profiles 表获取更详细信息 (role, bio 等)
+        const { data: profile } = await authService.getProfile(authUser.id);
+        if (profile) {
+          setUser(prev => ({
+            ...prev,
+            name: profile.username || prev.name,
+            avatar: profile.avatar_url || prev.avatar,
+            role: profile.department || prev.role, // 这里暂用 department 代替 role 展示
+            bio: profile.bio || prev.bio
+          }));
+        }
+      }
+    };
+    loadProfile();
+  }, [authUser]);
+
   const [editFormData, setEditFormData] = useState({ ...user });
+
+  // Update edit form when user data loads
+  useEffect(() => {
+    setEditFormData({ ...user });
+  }, [user]);
 
   const [settings, setSettings] = useState({
     pushNotifications: true,
@@ -95,16 +130,16 @@ const Station: React.FC<StationProps> = ({ onBookClick, onNotificationClick, has
   };
 
   const filteredHostedBooks = useMemo(() => {
-    return hostedBooks.filter(book => 
-      book.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
+    return hostedBooks.filter(book =>
+      book.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       book.author.toLowerCase().includes(searchQuery.toLowerCase()) ||
       book.nickname.toLowerCase().includes(searchQuery.toLowerCase())
     );
   }, [hostedBooks, searchQuery]);
 
   const filteredCirculatedBooks = useMemo(() => {
-    return circulatedBooks.filter(book => 
-      book.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
+    return circulatedBooks.filter(book =>
+      book.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       book.author.toLowerCase().includes(searchQuery.toLowerCase()) ||
       book.nickname.toLowerCase().includes(searchQuery.toLowerCase())
     );
@@ -122,7 +157,7 @@ const Station: React.FC<StationProps> = ({ onBookClick, onNotificationClick, has
   const confirmHandoverAction = () => {
     setHandoverStep('processing');
     const book = hostedBooks[selectedBookIndex!];
-    
+
     setTimeout(() => {
       setHandoverStep('success');
       const newCirculated: LocalBook = {
@@ -177,12 +212,12 @@ const Station: React.FC<StationProps> = ({ onBookClick, onNotificationClick, has
           <div className="flex items-center gap-3 w-full animate-fade-in">
             <div className="flex-1 flex items-center bg-white rounded-full h-10 px-4 shadow-inner border border-gray-100">
               <span className="material-symbols-outlined text-primary text-lg">search</span>
-              <input 
-                autoFocus 
-                value={searchQuery} 
-                onChange={(e) => setSearchQuery(e.target.value)} 
-                className="bg-transparent border-none focus:ring-0 text-sm ml-2 flex-1 outline-none text-text" 
-                placeholder="搜索书名、作者或昵称..." 
+              <input
+                autoFocus
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="bg-transparent border-none focus:ring-0 text-sm ml-2 flex-1 outline-none text-text"
+                placeholder="搜索书名、作者或昵称..."
               />
               {searchQuery && (
                 <button onClick={() => setSearchQuery('')} className="flex items-center">
@@ -197,7 +232,7 @@ const Station: React.FC<StationProps> = ({ onBookClick, onNotificationClick, has
 
       {!isSearching && (
         <div className="px-4 py-4">
-          <div 
+          <div
             onClick={() => { setEditFormData({ ...user }); setShowEditProfile(true); }}
             className="bg-white rounded-[32px] p-6 shadow-sm border border-gray-100 active:scale-[0.98] transition-all cursor-pointer relative group"
           >
@@ -233,8 +268,8 @@ const Station: React.FC<StationProps> = ({ onBookClick, onNotificationClick, has
           </div>
           <div className="flex gap-4 overflow-x-auto no-scrollbar py-2">
             {ALL_MEDALS.filter(m => m.unlocked).slice(0, 5).map(medal => (
-              <div 
-                key={medal.id} 
+              <div
+                key={medal.id}
                 onClick={() => setSelectedMedal(medal)}
                 className={`shrink-0 size-14 rounded-2xl bg-gradient-to-br ${medal.color} flex items-center justify-center shadow-lg active:scale-90 transition-transform cursor-pointer`}
               >
@@ -271,14 +306,14 @@ const Station: React.FC<StationProps> = ({ onBookClick, onNotificationClick, has
                         <h4 className="font-bold text-text text-base truncate">{book.title}</h4>
                         <p className="text-[11px] text-text-muted mt-1 truncate">{book.author}</p>
                       </div>
-                      
+
                       <div className="my-2">
                         <div className="flex justify-between items-center mb-1">
                           <span className="text-[9px] font-bold text-primary uppercase tracking-tighter">接待时长</span>
                           <span className="text-[9px] font-bold text-text-muted">{progress}%</span>
                         </div>
                         <div className="w-full h-1 bg-primary/10 rounded-full overflow-hidden">
-                          <div 
+                          <div
                             className="h-full bg-primary rounded-full transition-all duration-1000"
                             style={{ width: `${progress}%` }}
                           ></div>
@@ -291,13 +326,13 @@ const Station: React.FC<StationProps> = ({ onBookClick, onNotificationClick, has
                           {book.status}
                         </p>
                         <div className="flex gap-2">
-                          <button 
+                          <button
                             onClick={(e) => handleInitiateHandover(e, i)}
                             className="flex-1 py-2 bg-primary text-black rounded-lg text-[11px] font-bold active:scale-95 transition-all shadow-sm"
                           >
                             发起传阅
                           </button>
-                          <button 
+                          <button
                             onClick={(e) => { e.stopPropagation(); setSharingBook(book); }}
                             className="px-3 py-2 bg-primary/10 border border-primary/20 text-primary rounded-lg active:scale-95 transition-all"
                           >
@@ -378,7 +413,7 @@ const Station: React.FC<StationProps> = ({ onBookClick, onNotificationClick, has
             <div className="space-y-6">
               <div className="space-y-2">
                 <label className="text-[10px] font-bold text-text-muted uppercase tracking-widest ml-1">昵称</label>
-                <input 
+                <input
                   required
                   value={editFormData.name}
                   onChange={e => setEditFormData({...editFormData, name: e.target.value})}
@@ -388,7 +423,7 @@ const Station: React.FC<StationProps> = ({ onBookClick, onNotificationClick, has
               </div>
               <div className="space-y-2">
                 <label className="text-[10px] font-bold text-text-muted uppercase tracking-widest ml-1">职位/头衔</label>
-                <input 
+                <input
                   value={editFormData.role}
                   onChange={e => setEditFormData({...editFormData, role: e.target.value})}
                   className="w-full bg-background border-none rounded-2xl py-4 px-5 outline-none focus:ring-2 focus:ring-primary/20 transition-all text-text font-medium"
@@ -397,7 +432,7 @@ const Station: React.FC<StationProps> = ({ onBookClick, onNotificationClick, has
               </div>
               <div className="space-y-2">
                 <label className="text-[10px] font-bold text-text-muted uppercase tracking-widest ml-1">个人简介</label>
-                <textarea 
+                <textarea
                   value={editFormData.bio}
                   onChange={e => setEditFormData({...editFormData, bio: e.target.value})}
                   className="w-full bg-background border-none rounded-2xl py-4 px-5 outline-none focus:ring-2 focus:ring-primary/20 transition-all text-text text-sm h-32 resize-none"
@@ -428,7 +463,7 @@ const Station: React.FC<StationProps> = ({ onBookClick, onNotificationClick, has
                     <span className="text-sm font-bold text-text">推送通知</span>
                     <span className="text-[10px] text-text-muted">接收书籍到达与申请提醒</span>
                   </div>
-                  <button 
+                  <button
                     onClick={() => setSettings({...settings, pushNotifications: !settings.pushNotifications})}
                     className={`w-12 h-6 rounded-full transition-all relative ${settings.pushNotifications ? 'bg-primary' : 'bg-gray-200'}`}
                   >
@@ -440,7 +475,7 @@ const Station: React.FC<StationProps> = ({ onBookClick, onNotificationClick, has
                     <span className="text-sm font-bold text-text">隐身模式</span>
                     <span className="text-[10px] text-text-muted">在书籍旅行足迹中隐藏我的名字</span>
                   </div>
-                  <button 
+                  <button
                     onClick={() => setSettings({...settings, privacyMode: !settings.privacyMode})}
                     className={`w-12 h-6 rounded-full transition-all relative ${settings.privacyMode ? 'bg-primary' : 'bg-gray-200'}`}
                   >
@@ -468,7 +503,7 @@ const Station: React.FC<StationProps> = ({ onBookClick, onNotificationClick, has
               <button className="w-full py-4 bg-white border border-gray-100 rounded-2xl text-text-muted font-bold text-sm active:scale-95 transition-all">
                 清理缓存 (24.8 MB)
               </button>
-              <button 
+              <button
                 onClick={onLogout}
                 className="w-full py-4 bg-red-50 text-red-500 rounded-2xl font-bold text-sm active:scale-95 transition-all"
               >
@@ -484,7 +519,7 @@ const Station: React.FC<StationProps> = ({ onBookClick, onNotificationClick, has
         <div className="fixed inset-0 z-[250] bg-black/60 backdrop-blur-sm flex items-center justify-center p-6 animate-fade-in" onClick={() => setSelectedMedal(null)}>
           <div className="bg-white rounded-[40px] w-full max-sm p-8 shadow-2xl animate-zoom-in text-center relative overflow-hidden" onClick={e => e.stopPropagation()}>
              <div className={`absolute top-0 inset-x-0 h-32 bg-gradient-to-b ${selectedMedal.color} opacity-10`}></div>
-             
+
              <div className={`size-24 rounded-3xl bg-gradient-to-br ${selectedMedal.color} flex items-center justify-center mx-auto shadow-2xl mb-6 relative z-10`}>
                 <span className="material-symbols-outlined text-white text-5xl font-bold fill-icon">{selectedMedal.icon}</span>
              </div>
@@ -540,7 +575,7 @@ const Station: React.FC<StationProps> = ({ onBookClick, onNotificationClick, has
         <div className="fixed inset-0 z-[200] bg-black/60 backdrop-blur-sm flex items-end animate-fade-in">
           <div className="w-full bg-white rounded-t-[40px] p-6 pb-12 animate-slide-up max-h-[90vh] overflow-y-auto">
             <div className="w-12 h-1.5 bg-gray-200 rounded-full mx-auto mb-8"></div>
-            
+
             {handoverStep === 'form' && (
               <div className="space-y-6">
                 <h2 className="text-2xl font-bold text-text">书籍传阅交接</h2>
@@ -551,10 +586,10 @@ const Station: React.FC<StationProps> = ({ onBookClick, onNotificationClick, has
                     <p className="text-[10px] text-text-muted mt-1 uppercase">接力代号: #TRAVEL-{Math.floor(Math.random()*10000)}</p>
                   </div>
                 </div>
-                
+
                 <div className="space-y-3">
                   <label className="text-[10px] font-bold text-text-muted uppercase tracking-widest ml-1">给下位读者的寄语</label>
-                  <textarea 
+                  <textarea
                     value={handoverData.note}
                     onChange={e => setHandoverData({...handoverData, note: e.target.value})}
                     className="w-full bg-background rounded-2xl p-4 text-sm outline-none focus:ring-2 focus:ring-primary/20 transition-all h-24 resize-none"
@@ -609,7 +644,7 @@ const Station: React.FC<StationProps> = ({ onBookClick, onNotificationClick, has
                       <h3 className="text-2xl font-bold text-text">扫码交接已就绪</h3>
                       <p className="text-text-muted text-sm mt-1">请对方使用 BookTravel 扫描下方二维码</p>
                     </div>
-                    
+
                     <div className="bg-white p-6 rounded-[32px] shadow-2xl border border-gray-100 flex flex-col items-center relative overflow-hidden">
                       <div className="size-48 bg-background rounded-3xl flex items-center justify-center border-4 border-primary/20 relative overflow-hidden">
                         <img src="https://placehold.co/300x300/ffffff/13ec92?text=BOOK+CODE" className="size-40 rounded-xl" />
@@ -660,7 +695,7 @@ const Station: React.FC<StationProps> = ({ onBookClick, onNotificationClick, has
                     </div>
                   </>
                 )}
-                
+
                 <div className="flex flex-col gap-3">
                   <button onClick={() => setShowHandover(false)} className="w-full py-4 rounded-2xl bg-primary text-black font-bold shadow-lg shadow-primary/20 active:scale-95 transition-all">
                     {handoverData.method === 'qrcode' ? '完成交接' : '我已投递书籍'}
@@ -679,16 +714,16 @@ const Station: React.FC<StationProps> = ({ onBookClick, onNotificationClick, has
             <div className="w-12 h-1.5 bg-gray-200 rounded-full mx-auto mb-6"></div>
             <h2 className="text-xl font-bold text-text mb-2">发布到书友圈</h2>
             <p className="text-text-muted text-sm mb-6">分享你对《{sharingBook.title}》的接待感悟。</p>
-            <textarea 
-              autoFocus 
-              value={shareContent} 
-              onChange={e => setShareContent(e.target.value)} 
-              className="w-full bg-background rounded-2xl p-4 text-sm outline-none focus:ring-2 focus:ring-primary/20 h-32 resize-none" 
-              placeholder="写下你的感悟..." 
+            <textarea
+              autoFocus
+              value={shareContent}
+              onChange={e => setShareContent(e.target.value)}
+              className="w-full bg-background rounded-2xl p-4 text-sm outline-none focus:ring-2 focus:ring-primary/20 h-32 resize-none"
+              placeholder="写下你的感悟..."
             />
             <div className="flex gap-4 pt-6">
               <button onClick={() => setSharingBook(null)} className="flex-1 py-4 bg-gray-100 rounded-xl font-bold active:scale-95">取消</button>
-              <button 
+              <button
                 onClick={() => {
                    onShare?.({
                       userName: user.name,
@@ -703,7 +738,7 @@ const Station: React.FC<StationProps> = ({ onBookClick, onNotificationClick, has
                    });
                    setSharingBook(null);
                 }}
-                disabled={!shareContent.trim()} 
+                disabled={!shareContent.trim()}
                 className="flex-[2] py-4 bg-primary text-black rounded-xl font-bold disabled:opacity-50 active:scale-95 transition-all"
               >
                 发布动态

@@ -1,7 +1,9 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { bookService } from '../src/services/books';
 import { TRAVEL_HISTORY, MOCK_BOOKS, MOCK_RECOMMENDATIONS } from '../constants';
 import { PostItem } from './Community';
+import { Book } from '../types';
 
 interface BookPassportProps {
   bookId: string;
@@ -13,28 +15,46 @@ const BookPassport: React.FC<BookPassportProps> = ({ bookId, onBack, onShare }) 
   const [showShareModal, setShowShareModal] = useState(false);
   const [shareContent, setShareContent] = useState('');
 
+  const [realBook, setRealBook] = useState<Book | null>(null);
+
+  useEffect(() => {
+    const loadBook = async () => {
+      try {
+        // 尝试加载真实书籍
+        const data = await bookService.getBookById(bookId);
+        if (data) setRealBook(data);
+      } catch (e) {
+        // 忽略错误，回退到 Mock 数据
+        console.log("Loading real book failed, using mock", e);
+      }
+    };
+    if (bookId) loadBook();
+  }, [bookId]);
+
   // 综合查找书籍信息
   const currentBook = useMemo(() => {
+    if (realBook) return realBook;
+
     const allKnownBooks = [...MOCK_BOOKS, ...MOCK_RECOMMENDATIONS];
     // 如果是 Shelf 传来的 c1/p1 等 ID，这里做个 fallback 模拟
     const found = allKnownBooks.find(b => b.id === bookId);
     if (found) return found;
-    
-    // Fallback 模拟数据 (针对 Shelf 页面产生的 ID)
+
+    // Fallback 模拟数据
     return {
       id: bookId,
-      title: bookId.startsWith('c') ? '设计心理学' : '三体',
+      title: '未知书籍',
       author: '未知作者',
-      cover: `https://picsum.sh/seed/${bookId}/400/600`,
+      cover: `https://picsum.photos/seed/${bookId}/400/600`,
       nickname: '神秘旅人',
-      location: '驿站待定',
+      location: '未知位置',
       status: 'available' as const
     };
-  }, [bookId]);
+  }, [bookId, realBook]);
 
   const handleShare = () => {
     if (!shareContent.trim()) return;
-    
+
     onShare?.({
       userName: 'Alex Chen',
       targetUser: '全体书友',
@@ -46,9 +66,20 @@ const BookPassport: React.FC<BookPassportProps> = ({ bookId, onBack, onShare }) 
       image1: currentBook.cover,
       image2: `https://picsum.photos/seed/share_${bookId}/400/400`
     });
-    
+
     setShowShareModal(false);
     onBack();
+  };
+
+  const handleApply = async () => {
+    try {
+      await bookService.applyForBook(currentBook.id);
+      alert('申请成功！书籍已加入您的驿站。');
+      onBack(); // 返回上一页
+    } catch (e: any) {
+      console.error(e);
+      alert(e.message || '申请失败');
+    }
   };
 
   return (
@@ -65,7 +96,7 @@ const BookPassport: React.FC<BookPassportProps> = ({ bookId, onBack, onShare }) 
 
       <div className="p-6 flex flex-col items-center">
         <div className="relative group">
-          <div 
+          <div
             className="w-40 h-56 bg-center bg-cover rounded-xl shadow-2xl border-4 border-white transform transition-transform group-hover:rotate-2 duration-500"
             style={{ backgroundImage: `url("${currentBook.cover}")` }}
           />
@@ -77,7 +108,7 @@ const BookPassport: React.FC<BookPassportProps> = ({ bookId, onBack, onShare }) 
         <div className="mt-8 text-center w-full">
           <h1 className="text-text text-2xl font-bold tracking-tight">{currentBook.title}</h1>
           <p className="text-text-muted text-base font-medium mt-1">旅行昵称：{currentBook.nickname}</p>
-          
+
           <div className="flex items-center justify-center gap-2 mt-3">
             <span className="bg-primary/20 text-text text-[10px] font-bold px-3 py-1 rounded-full border border-primary/30 uppercase tracking-tighter">
               编号: #BK-{Math.floor(Math.random() * 9000) + 1000}
@@ -87,7 +118,7 @@ const BookPassport: React.FC<BookPassportProps> = ({ bookId, onBack, onShare }) 
             </span>
           </div>
 
-          <button 
+          <button
             onClick={() => setShowShareModal(true)}
             className="mt-6 inline-flex items-center gap-2 px-6 py-2.5 bg-primary/10 border border-primary/20 text-primary rounded-full text-xs font-bold active:scale-95 transition-all shadow-sm"
           >
@@ -101,7 +132,7 @@ const BookPassport: React.FC<BookPassportProps> = ({ bookId, onBack, onShare }) 
         <h3 className="text-text text-lg font-bold flex items-center gap-2 mb-4">
           <span className="material-symbols-outlined text-primary">route</span> 足迹地图
         </h3>
-        
+
         <div className="p-5 bg-white rounded-2xl shadow-sm border border-gray-50">
           {TRAVEL_HISTORY.map((node, index) => (
             <div key={index} className="grid grid-cols-[40px_1fr] gap-x-3 group">
@@ -149,7 +180,7 @@ const BookPassport: React.FC<BookPassportProps> = ({ bookId, onBack, onShare }) 
         <div className="fixed inset-0 z-[100] bg-black/40 backdrop-blur-sm flex items-end animate-fade-in">
           <div className="w-full bg-white rounded-t-[32px] p-6 pb-10 animate-slide-up shadow-2xl">
             <div className="w-12 h-1.5 bg-gray-200 rounded-full mx-auto mb-6"></div>
-            
+
             <h2 className="text-xl font-bold text-text mb-2">分享到书友圈</h2>
             <p className="text-text-muted text-sm mb-6">记录这一刻的阅读心境，寻找志同道合的书友。</p>
 
@@ -164,7 +195,7 @@ const BookPassport: React.FC<BookPassportProps> = ({ bookId, onBack, onShare }) 
 
               <div className="space-y-2">
                 <label className="text-[10px] font-bold text-text-muted uppercase tracking-widest ml-1">感悟动态</label>
-                <textarea 
+                <textarea
                   autoFocus
                   value={shareContent}
                   onChange={e => setShareContent(e.target.value)}
@@ -174,13 +205,13 @@ const BookPassport: React.FC<BookPassportProps> = ({ bookId, onBack, onShare }) 
               </div>
 
               <div className="flex gap-4 pt-4">
-                <button 
+                <button
                   onClick={() => setShowShareModal(false)}
                   className="flex-1 py-4 rounded-xl font-bold text-sm text-text-muted bg-gray-100 active:scale-95 transition-all"
                 >
                   取消
                 </button>
-                <button 
+                <button
                   onClick={handleShare}
                   disabled={!shareContent.trim()}
                   className="flex-[2] py-4 rounded-xl font-bold text-sm bg-primary text-black shadow-lg shadow-primary/20 active:scale-95 transition-all disabled:opacity-50 disabled:grayscale"
@@ -195,20 +226,24 @@ const BookPassport: React.FC<BookPassportProps> = ({ bookId, onBack, onShare }) 
 
       <div className="fixed bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-background via-background/95 to-transparent">
         <div className="flex gap-3">
-          <button 
+          <button
             onClick={() => setShowShareModal(true)}
             className="flex-1 bg-white border border-primary/20 text-primary py-4 rounded-xl font-bold text-base shadow-sm active:scale-95 transition-all flex items-center justify-center gap-2"
           >
             <span className="material-symbols-outlined text-[20px]">forum</span>
             分享感悟
           </button>
-          <button className="flex-[2] bg-primary text-black py-4 rounded-xl font-bold text-base shadow-xl shadow-primary/20 flex items-center justify-center gap-2 active:scale-95 transition-all">
+          <button
+            onClick={handleApply}
+            disabled={currentBook.status !== 'available'}
+            className="flex-[2] bg-primary text-black py-4 rounded-xl font-bold text-base shadow-xl shadow-primary/20 flex items-center justify-center gap-2 active:scale-95 transition-all disabled:opacity-50 disabled:grayscale"
+          >
             <span className="material-symbols-outlined text-[20px]">handshake</span>
-            申请接待
+            {currentBook.status === 'available' ? '申请接待' : '已被申请'}
           </button>
         </div>
       </div>
-      
+
       <style>{`
         .animate-fade-in { animation: fadeIn 0.3s ease-out; }
         .animate-slide-up { animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
