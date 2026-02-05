@@ -38,10 +38,15 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
       } else {
         const { error } = await authService.signUp(formData.email, formData.password, formData.username);
         if (error) throw error;
+        // 如果开启了邮箱验证，这里应该提示用户去查收邮件
+        if (!error) {
+           alert('注册成功！请前往您的邮箱确认验证链接，验证后将自动跳转。');
+           return; // 阻止后续直接调用 onLogin，等待用户点击邮件链接
+        }
       }
       if (!isResetView) {
         // Auth state change will be handled by AuthContext
-        onLogin(); // Optional: kept for compatibility
+        // onLogin(); // Optional: kept for compatibility
       }
     } catch (err: any) {
       alert(err.message || '操作失败');

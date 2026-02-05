@@ -9,7 +9,8 @@ export const authService = {
         data: {
           username,
           avatar_url: `https://ui-avatars.com/api/?name=${username}`
-        }
+        },
+        emailRedirectTo: 'https://booktravel-five.vercel.app/'
       }
     });
     return { data, error };
