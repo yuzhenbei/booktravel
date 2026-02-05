@@ -2,6 +2,9 @@ import { supabase } from '../lib/supabase';
 
 export const authService = {
   async signUp(email: string, password: string, username: string) {
+    // 动态获取当前环境的 URL (本地 localhost 或生产环境域名)
+    const redirectUrl = window.location.origin;
+
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
@@ -10,7 +13,8 @@ export const authService = {
           username,
           avatar_url: `https://ui-avatars.com/api/?name=${username}`
         },
-        emailRedirectTo: 'https://booktravel-five.vercel.app/'
+        // 自动适配：本地为 http://localhost:xxxx, 生产为 https://booktravel-five.vercel.app
+        emailRedirectTo: redirectUrl
       }
     });
     return { data, error };
